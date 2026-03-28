@@ -11,13 +11,17 @@ inputs:
     description: "selvo API key (from selvo.fly.dev)"
     required: true
   ecosystem:
-    description: "Ecosystem to scan (debian, ubuntu, fedora, alpine, arch, nixos, all)"
+    description: "Ecosystem to scan (debian, ubuntu, fedora, alpine, arch, all)"
     required: false
     default: "all"
   limit:
-    description: "Max packages to return"
+    description: "Max packages for reference scan (ignored for system scan)"
     required: false
     default: "50"
+  scan-mode:
+    description: "Scan mode: auto (detect runner packages), reference (common packages), system (force runner scan)"
+    required: false
+    default: "auto"
   fail-on-kev:
     description: "Fail if any CISA KEV packages found"
     required: false
@@ -37,9 +41,9 @@ inputs:
 
 outputs:
   total-packages:
-    description: "Total packages analyzed"
+    description: "Total packages scanned"
   packages-with-cves:
-    description: "Number of packages with CVEs"
+    description: "Number of packages with open CVEs"
   kev-count:
     description: "Number of CISA KEV packages"
   weaponized-count:
@@ -59,6 +63,7 @@ runs:
         SELVO_API_URL: ${{ inputs.api-url }}
         SELVO_ECOSYSTEM: ${{ inputs.ecosystem }}
         SELVO_LIMIT: ${{ inputs.limit }}
+        SELVO_SCAN_MODE: ${{ inputs.scan-mode }}
         SELVO_FAIL_ON_KEV: ${{ inputs.fail-on-kev }}
         SELVO_FAIL_ON_WEAPONIZED: ${{ inputs.fail-on-weaponized }}
         SELVO_MIN_SCORE: ${{ inputs.min-score }}
