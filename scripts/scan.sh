@@ -157,6 +157,57 @@ fi
 echo "" >> "$GITHUB_STEP_SUMMARY"
 echo "*Powered by [selvo](https://selvo.dev) — Linux dependency risk scanner*" >> "$GITHUB_STEP_SUMMARY"
 
+# ── PR Comment ──────────────────────────────────────────────────────────
+# Post results as a PR comment when running on a pull_request event.
+
+if [ -n "${GITHUB_TOKEN:-}" ] && [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
+  PR_NUMBER=$(jq -r '.pull_request.number // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)
+  if [ -n "$PR_NUMBER" ]; then
+    # Build comment body
+    COMMENT="## selvo Security Scan
+
+| Metric | Value |
+|--------|-------|
+| Packages scanned | **${TOTAL}** |
+| With open CVEs | **${WITH_CVES}** |
+| CISA KEV | **${KEV_COUNT}** |
+| Max risk score | **${MAX_SCORE}** |
+"
+    if [ "$TOP_COUNT" -gt 0 ]; then
+      TABLE=$(echo "$TOP" | jq -r 'sort_by(-.score) | .[:10] | .[] | "| \(.name) | \(.score) | \(.cve_count // 0) | \(.max_cvss // 0) |"')
+      COMMENT="${COMMENT}
+<details><summary>Top packages by risk</summary>
+
+| Package | Score | CVEs | CVSS |
+|---------|-------|------|------|
+${TABLE}
+
+</details>
+"
+    fi
+    COMMENT="${COMMENT}
+*Powered by [selvo](https://selvo.dev)*"
+
+    # Update existing comment or create new one
+    EXISTING=$(curl -sf -H "Authorization: token $GITHUB_TOKEN" \
+      "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+      | jq -r '.[] | select(.body | contains("selvo Security Scan")) | .id' | head -1 2>/dev/null || true)
+
+    BODY_JSON=$(jq -n --arg body "$COMMENT" '{body: $body}')
+    if [ -n "$EXISTING" ]; then
+      curl -sf -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: application/json" \
+        "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" \
+        -d "$BODY_JSON" >/dev/null && echo "Updated PR comment." || true
+    else
+      curl -sf -X POST -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: application/json" \
+        "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+        -d "$BODY_JSON" >/dev/null && echo "Posted PR comment." || true
+    fi
+  fi
+fi
+
 # ── Gate checks ─────────────────────────────────────────────────────────
 
 PASSED=true
